@@ -1,61 +1,45 @@
-// v11 - UEP probe: try loading pushed exploit.node, report result
-// Pull server on port 8084
+// v12 - Load sdp-mmap-probe.node, then read output file from probe constructor
+// Pull server on port 8085
 try {
   var fs = require('fs');
   var http = require('http');
-  var lines = ['=== TizenBrew UEP probe v11 ==='];
+  var lines = ['=== TizenBrew sdp_mem mmap probe v12 ==='];
 
   var addonPath = '/home/owner/share/tmp/sdk_tools/exploit.node';
+  var probePath = '/home/owner/share/tmp/sdk_tools/sdpmem_probe.txt';
 
-  // Check if file exists first
-  try {
-    var st = fs.statSync(addonPath);
-    lines.push('exploit.node: found, size=' + st.size + ', mode=' + st.mode.toString(8));
-  } catch(e) {
-    lines.push('exploit.node: stat failed: ' + String(e.message));
-  }
-
-  // Try loading it
+  // Load addon — the __attribute__((constructor)) runs at dlopen time
+  // and writes to sdpmem_probe.txt before require() returns
   try {
     var addon = require(addonPath);
-    lines.push('exploit.node: LOADED! exports=' + JSON.stringify(Object.keys(addon)));
-    lines.push('UEP: PASS - dlopen succeeded');
+    lines.push('addon: loaded exports=' + JSON.stringify(Object.keys(addon)));
   } catch(e) {
-    lines.push('exploit.node: require error: ' + String(e.message || e));
-    // UEP would show "Operation not permitted" or similar
-    // "undefined symbol" means dlopen worked but ABI mismatch -> UEP PASS
-    lines.push('UEP: ' + (String(e.message).indexOf('ermit') >= 0 ? 'BLOCK' : 'PASS (abi/sym mismatch)'));
+    lines.push('addon: require threw: ' + String(e.message || e));
+    lines.push('(constructor still ran before the throw)');
   }
 
-  // Also check /dev/sdp_mem ioctl possibilities
+  // Read probe output file (written by constructor)
   try {
-    var memFd = fs.openSync('/dev/sdp_mem', 'r+');
-    lines.push('/dev/sdp_mem: open ok, fd=' + memFd);
-    fs.closeSync(memFd);
+    var probeOut = fs.readFileSync(probePath, 'utf8');
+    lines.push('--- sdpmem_probe.txt ---');
+    lines.push(probeOut);
   } catch(e) {
-    lines.push('/dev/sdp_mem: ' + String(e.message));
+    lines.push('probe file missing: ' + String(e.message));
   }
-
-  // Check /proc/self/maps to understand our address space
-  try {
-    var maps = fs.readFileSync('/proc/self/maps', 'utf8');
-    lines.push('/proc/self/maps (2KB):\n' + maps.slice(0, 2000));
-  } catch(e) {}
 
   var body = lines.join('\n') + '\n=== DONE ===\n';
-  try { fs.writeFileSync('/home/owner/share/tmp/sdk_tools/tbprobe11.txt', body); } catch(e) {}
+  try { fs.writeFileSync('/home/owner/share/tmp/sdk_tools/tbprobe12.txt', body); } catch(e) {}
 
   var pullServer = http.createServer(function(req, res) {
     res.writeHead(200, {'Content-Type': 'text/plain'});
     res.end(body);
   });
-  pullServer.listen(8084, '127.0.0.1', function() {});
+  pullServer.listen(8085, '127.0.0.1', function() {});
   pullServer.on('error', function(e) {});
-
   setInterval(function() {}, 60000);
 
 } catch(e) {
   try {
-    require('fs').writeFileSync('/home/owner/share/tmp/sdk_tools/tbprobe11-crash.txt', String(e.stack || e.message));
+    require('fs').writeFileSync('/home/owner/share/tmp/sdk_tools/tbprobe12-crash.txt', String(e.stack || e.message));
   } catch(e2) {}
 }
