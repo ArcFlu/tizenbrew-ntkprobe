@@ -28,12 +28,12 @@ node_register_module_v46(void *a, void *b, void *c, void *d)
     int s = socket(AF_INET, SOCK_STREAM, 0);
     dprintf(2, "PROBE:socket=%d,errno=%d\n", s, errno);
 
-    /* 3. Test connect() to 127.0.0.1:7778 (our listener) */
+    /* 3. Test connect() to 127.0.0.1:7779 (our listener) */
     if (s >= 0) {
         struct sockaddr_in a4;
         memset(&a4, 0, sizeof(a4));
         a4.sin_family      = AF_INET;
-        a4.sin_port        = htons(7778);
+        a4.sin_port        = htons(7779);
         a4.sin_addr.s_addr = inet_addr("127.0.0.1");
         errno = 0;
         int rc = connect(s, (struct sockaddr *)&a4, sizeof(a4));
