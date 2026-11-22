@@ -1,0 +1,47 @@
+name: Build ARM hard-float addon
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'mmap-libc.c'
+      - '.github/workflows/build-arm.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install arm-linux-gnueabihf toolchain
+        run: sudo apt-get install -y gcc-arm-linux-gnueabihf
+
+      - name: Build mmap-libc.node
+        run: |
+          arm-linux-gnueabihf-gcc \
+            -march=armv7-a -mfloat-abi=hard -mfpu=neon \
+            -shared -fPIC -o mmap-libc.node mmap-libc.c \
+            -lc \
+            -Wl,--hash-style=gnu \
+            -Wl,-soname,mmap-libc.node
+          arm-linux-gnueabihf-readelf -h mmap-libc.node | grep -E 'ABI|Flags|Type|Machine'
+          arm-linux-gnueabihf-nm -D mmap-libc.node | grep node_register
+          ls -la mmap-libc.node
+
+      - name: Commit binary to repo
+        run: |
+          git config user.email "arcflu52@gmail.com"
+          git config user.name "ArcFlu CI"
+          git add mmap-libc.node
+          git diff --cached --stat
+          git commit -m "ci: build mmap-libc.node (arm-linux-gnueabihf)" || echo "nothing to commit"
+          git push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mmap-libc-node
+          path: mmap-libc.node
