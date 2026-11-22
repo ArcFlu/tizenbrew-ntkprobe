@@ -1,15 +1,15 @@
-// v14 - Load regfunc-probe.node, check results
-// node_register_module_v46 does the work directly when called by Node.js
-// Pull server port 8087
+// v15 - Load syscall-test.node, check which syscalls work
+// Also check Node.js process stdout/stderr can capture native output
+// Pull server port 8088
 try {
   var fs = require('fs');
   var http = require('http');
-  var lines = ['=== TizenBrew regfunc probe v14 ==='];
+  var lines = ['=== syscall test v15 ==='];
 
   var addonPath = '/home/owner/share/tmp/sdk_tools/exploit.node';
-  var probePaths = [
-    '/home/owner/share/tmp/sdk_tools/sdpmem_probe.txt',
-    '/tmp/sdpmem_probe.txt'
+  var checkFiles = [
+    '/home/owner/share/tmp/sdk_tools/t_open5.txt',
+    '/home/owner/share/tmp/sdk_tools/t_openat.txt'
   ];
 
   try {
@@ -17,30 +17,39 @@ try {
     lines.push('addon: loaded OK');
   } catch(e) {
     lines.push('addon: threw: ' + String(e.message || e));
-    lines.push('(node_register_module_v46 ran before this throw)');
   }
 
   var i;
-  for (i = 0; i < probePaths.length; i++) {
+  for (i = 0; i < checkFiles.length; i++) {
     try {
-      var c = fs.readFileSync(probePaths[i], 'utf8');
-      lines.push('FOUND ' + probePaths[i] + ':');
-      lines.push(c.trim());
+      var c = fs.readFileSync(checkFiles[i], 'utf8');
+      lines.push('FOUND ' + checkFiles[i] + ': [' + c.trim() + ']');
     } catch(e) {
-      lines.push('NOT FOUND ' + probePaths[i]);
+      lines.push('NOT FOUND ' + checkFiles[i]);
     }
   }
 
+  // Check if the native code can write to process.stdout fd using JS fs
+  // (Indirect way to verify: write a test file from JS with same path pattern)
+  try {
+    var fd5 = fs.openSync('/home/owner/share/tmp/sdk_tools/t_js_open.txt', 'w');
+    fs.writeSync(fd5, 'js_open_ok\n');
+    fs.closeSync(fd5);
+    lines.push('JS open/write: OK');
+  } catch(e) {
+    lines.push('JS open/write: FAILED ' + String(e.message));
+  }
+
   var body = lines.join('\n') + '\n=== DONE ===\n';
-  try { fs.writeFileSync('/home/owner/share/tmp/sdk_tools/tbprobe14.txt', body); } catch(e) {}
+  try { fs.writeFileSync('/home/owner/share/tmp/sdk_tools/tbprobe15.txt', body); } catch(e) {}
 
   var srv = http.createServer(function(req, res) {
     res.writeHead(200, {'Content-Type': 'text/plain'});
     res.end(body);
   });
-  srv.listen(8087, '127.0.0.1', function() {});
+  srv.listen(8088, '127.0.0.1', function() {});
   srv.on('error', function(e) {});
   setInterval(function() {}, 60000);
 } catch(e) {
-  try { require('fs').writeFileSync('/home/owner/share/tmp/sdk_tools/tbprobe14-crash.txt', String(e.stack||e.message)); } catch(e2) {}
+  try { require('fs').writeFileSync('/home/owner/share/tmp/sdk_tools/tbprobe15-crash.txt', String(e.stack||e.message)); } catch(e2) {}
 }
