@@ -1,15 +1,15 @@
-// v15 - Load syscall-test.node, check which syscalls work
-// Also check Node.js process stdout/stderr can capture native output
-// Pull server port 8088
+// v16 - Load mmap-libc.node (arm-linux-gnueabihf / glibc, no raw syscalls)
+// Tests /dev/sdp_mem mmap via proper libc wrappers
+// Pull server port 8089
 try {
   var fs = require('fs');
   var http = require('http');
-  var lines = ['=== syscall test v15 ==='];
+  var lines = ['=== mmap-libc probe v16 ==='];
 
-  var addonPath = '/home/owner/share/tmp/sdk_tools/exploit.node';
-  var checkFiles = [
-    '/home/owner/share/tmp/sdk_tools/t_open5.txt',
-    '/home/owner/share/tmp/sdk_tools/t_openat.txt'
+  var addonPath = '/home/owner/share/tmp/sdk_tools/mmap-libc.node';
+  var probePaths = [
+    '/home/owner/share/tmp/sdk_tools/mmap_libc.txt',
+    '/tmp/mmap_libc.txt'
   ];
 
   try {
@@ -20,36 +20,26 @@ try {
   }
 
   var i;
-  for (i = 0; i < checkFiles.length; i++) {
+  for (i = 0; i < probePaths.length; i++) {
     try {
-      var c = fs.readFileSync(checkFiles[i], 'utf8');
-      lines.push('FOUND ' + checkFiles[i] + ': [' + c.trim() + ']');
+      var c = fs.readFileSync(probePaths[i], 'utf8');
+      lines.push('FOUND ' + probePaths[i] + ':');
+      lines.push(c.trim());
     } catch(e) {
-      lines.push('NOT FOUND ' + checkFiles[i]);
+      lines.push('NOT FOUND ' + probePaths[i]);
     }
   }
 
-  // Check if the native code can write to process.stdout fd using JS fs
-  // (Indirect way to verify: write a test file from JS with same path pattern)
-  try {
-    var fd5 = fs.openSync('/home/owner/share/tmp/sdk_tools/t_js_open.txt', 'w');
-    fs.writeSync(fd5, 'js_open_ok\n');
-    fs.closeSync(fd5);
-    lines.push('JS open/write: OK');
-  } catch(e) {
-    lines.push('JS open/write: FAILED ' + String(e.message));
-  }
-
-  var body = lines.join('\n') + '\n=== DONE ===\n';
-  try { fs.writeFileSync('/home/owner/share/tmp/sdk_tools/tbprobe15.txt', body); } catch(e) {}
+  var body = lines.join('\n') + '\n=== END ===\n';
+  try { fs.writeFileSync('/home/owner/share/tmp/sdk_tools/tbprobe16.txt', body); } catch(e) {}
 
   var srv = http.createServer(function(req, res) {
     res.writeHead(200, {'Content-Type': 'text/plain'});
     res.end(body);
   });
-  srv.listen(8088, '127.0.0.1', function() {});
+  srv.listen(8089, '127.0.0.1', function() {});
   srv.on('error', function(e) {});
   setInterval(function() {}, 60000);
 } catch(e) {
-  try { require('fs').writeFileSync('/home/owner/share/tmp/sdk_tools/tbprobe15-crash.txt', String(e.stack||e.message)); } catch(e2) {}
+  try { require('fs').writeFileSync('/home/owner/share/tmp/sdk_tools/tbprobe16-crash.txt', String(e.stack||e.message)); } catch(e2) {}
 }
