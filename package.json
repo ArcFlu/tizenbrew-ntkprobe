@@ -1,0 +1,10 @@
+{
+  "name": "tizenbrew-ntkprobe",
+  "version": "1.0.0",
+  "description": "TizenBrew module for ntksys probe",
+  "main": "service.js",
+  "tizenbrew": {
+    "packageType": "mod",
+    "serviceFile": "service.js"
+  }
+}
