@@ -7,6 +7,7 @@ on:
       - 'mmap-libc.c'
       - 'mmap-sock.c'
       - 'diag-glibc.c'
+      - 'timing-probe.c'
       - '.github/workflows/build-arm.yml'
   workflow_dispatch:
 
@@ -26,11 +27,12 @@ jobs:
           GCC="arm-linux-gnueabihf-gcc -march=armv7-a -mfloat-abi=hard -mfpu=neon -shared -fPIC -fno-stack-protector"
           LDFLAGS="-Wl,--hash-style=gnu -Wl,--as-needed -lc"
 
-          $GCC -o mmap-libc.node  mmap-libc.c  $LDFLAGS -Wl,-soname,mmap-libc.node
-          $GCC -o mmap-sock.node  mmap-sock.c  $LDFLAGS -Wl,-soname,mmap-sock.node
-          $GCC -o diag-glibc.node diag-glibc.c $LDFLAGS -Wl,-soname,diag-glibc.node
+          $GCC -o mmap-libc.node   mmap-libc.c   $LDFLAGS -Wl,-soname,mmap-libc.node
+          $GCC -o mmap-sock.node   mmap-sock.c   $LDFLAGS -Wl,-soname,mmap-sock.node
+          $GCC -o diag-glibc.node  diag-glibc.c  $LDFLAGS -Wl,-soname,diag-glibc.node
+          $GCC -o timing-probe.node timing-probe.c $LDFLAGS -Wl,-soname,timing-probe.node
 
-          for f in mmap-libc.node mmap-sock.node diag-glibc.node; do
+          for f in mmap-libc.node mmap-sock.node diag-glibc.node timing-probe.node; do
             echo "=== $f ==="
             arm-linux-gnueabihf-readelf -h $f | grep -E 'Flags|Type|Machine'
             arm-linux-gnueabihf-readelf -d $f | grep -E 'NEEDED|SONAME'
@@ -46,3 +48,4 @@ jobs:
             mmap-libc.node
             mmap-sock.node
             diag-glibc.node
+            timing-probe.node
