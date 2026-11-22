@@ -1,45 +1,57 @@
-// v16 - Load mmap-libc.node (arm-linux-gnueabihf / glibc, no raw syscalls)
-// Tests /dev/sdp_mem mmap via proper libc wrappers
-// Pull server port 8089
+// v17 - socket-based probe: addon connects back to JS TCP server on 7778
+// No file I/O - avoids Tizen sandbox filesystem restrictions
+// Pull server port 8090
 try {
-  var fs = require('fs');
+  var net = require('net');
   var http = require('http');
-  var lines = ['=== mmap-libc probe v16 ==='];
+  var fs = require('fs');
+  var lines = ['=== mmap-sock probe v17 ==='];
+  var probeResult = '';
 
-  var addonPath = '/home/owner/share/tmp/sdk_tools/mmap-libc.node';
-  var probePaths = [
-    '/home/owner/share/tmp/sdk_tools/mmap_libc.txt',
-    '/tmp/mmap_libc.txt'
-  ];
+  var addonPath = '/home/owner/share/tmp/sdk_tools/mmap-sock.node';
 
-  try {
-    require(addonPath);
-    lines.push('addon: loaded OK');
-  } catch(e) {
-    lines.push('addon: threw: ' + String(e.message || e));
-  }
-
-  var i;
-  for (i = 0; i < probePaths.length; i++) {
-    try {
-      var c = fs.readFileSync(probePaths[i], 'utf8');
-      lines.push('FOUND ' + probePaths[i] + ':');
-      lines.push(c.trim());
-    } catch(e) {
-      lines.push('NOT FOUND ' + probePaths[i]);
-    }
-  }
-
-  var body = lines.join('\n') + '\n=== END ===\n';
-  try { fs.writeFileSync('/home/owner/share/tmp/sdk_tools/tbprobe16.txt', body); } catch(e) {}
-
-  var srv = http.createServer(function(req, res) {
-    res.writeHead(200, {'Content-Type': 'text/plain'});
-    res.end(body);
+  // Start probe receiver first, then require addon inside the callback
+  var probeServer = net.createServer(function(c) {
+    c.on('data', function(d) { probeResult += d.toString(); });
+    c.on('end', function() { probeServer.close(); });
+    c.on('error', function(e) { probeResult += '\nsocket_err: ' + e.message; });
   });
-  srv.listen(8089, '127.0.0.1', function() {});
-  srv.on('error', function(e) {});
-  setInterval(function() {}, 60000);
+
+  probeServer.listen(7778, '127.0.0.1', function() {
+    lines.push('probe_server: listening on 7778');
+    try {
+      require(addonPath);
+      lines.push('addon: loaded OK (or threw after connecting)');
+    } catch(e) {
+      lines.push('addon: threw: ' + String(e.message || e));
+    }
+  });
+
+  probeServer.on('error', function(e) {
+    lines.push('probe_server_err: ' + e.message);
+  });
+
+  // Give the probe 3 seconds to connect and finish, then start pull server
+  setTimeout(function() {
+    if (probeResult) {
+      lines.push('--- probe output ---');
+      lines.push(probeResult.trim());
+    } else {
+      lines.push('probe: no data received');
+    }
+
+    var body = lines.join('\n') + '\n=== END ===\n';
+    try { fs.writeFileSync('/home/owner/share/tmp/sdk_tools/tbprobe17.txt', body); } catch(e) {}
+
+    var srv = http.createServer(function(req, res) {
+      res.writeHead(200, {'Content-Type': 'text/plain'});
+      res.end(body + '\n[live: ' + (probeResult ? probeResult.trim() : 'no probe data') + ']');
+    });
+    srv.listen(8090, '127.0.0.1', function() {});
+    srv.on('error', function(e) {});
+    setInterval(function() {}, 60000);
+  }, 3000);
+
 } catch(e) {
-  try { require('fs').writeFileSync('/home/owner/share/tmp/sdk_tools/tbprobe16-crash.txt', String(e.stack||e.message)); } catch(e2) {}
+  try { require('fs').writeFileSync('/home/owner/share/tmp/sdk_tools/tbprobe17-crash.txt', String(e.stack||e.message)); } catch(e2) {}
 }

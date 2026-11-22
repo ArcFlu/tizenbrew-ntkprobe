@@ -5,6 +5,7 @@ on:
     branches: [ main ]
     paths:
       - 'mmap-libc.c'
+      - 'mmap-sock.c'
       - '.github/workflows/build-arm.yml'
   workflow_dispatch:
 
@@ -19,20 +20,26 @@ jobs:
       - name: Install arm-linux-gnueabihf toolchain
         run: sudo apt-get install -y gcc-arm-linux-gnueabihf
 
-      - name: Build mmap-libc.node
+      - name: Build addons
         run: |
-          arm-linux-gnueabihf-gcc \
-            -march=armv7-a -mfloat-abi=hard -mfpu=neon \
-            -shared -fPIC -o mmap-libc.node mmap-libc.c \
-            -lc \
-            -Wl,--hash-style=gnu \
-            -Wl,-soname,mmap-libc.node
-          arm-linux-gnueabihf-readelf -h mmap-libc.node | grep -E 'ABI|Flags|Type|Machine'
-          arm-linux-gnueabihf-nm -D mmap-libc.node | grep node_register
-          ls -la mmap-libc.node
+          GCC="arm-linux-gnueabihf-gcc -march=armv7-a -mfloat-abi=hard -mfpu=neon -shared -fPIC -fno-stack-protector"
+          LDFLAGS="-Wl,--hash-style=gnu -Wl,--as-needed -lc"
 
-      - name: Upload artifact
+          $GCC -o mmap-libc.node mmap-libc.c $LDFLAGS -Wl,-soname,mmap-libc.node
+          $GCC -o mmap-sock.node  mmap-sock.c  $LDFLAGS -Wl,-soname,mmap-sock.node
+
+          for f in mmap-libc.node mmap-sock.node; do
+            echo "=== $f ==="
+            arm-linux-gnueabihf-readelf -h $f | grep -E 'Flags|Type|Machine'
+            arm-linux-gnueabihf-readelf -d $f | grep -E 'NEEDED|SONAME'
+            arm-linux-gnueabihf-nm -D $f | grep node_register
+            ls -la $f
+          done
+
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: mmap-libc-node
-          path: mmap-libc.node
+          name: arm-addons
+          path: |
+            mmap-libc.node
+            mmap-sock.node
