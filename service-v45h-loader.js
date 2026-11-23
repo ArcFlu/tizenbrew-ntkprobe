@@ -13,6 +13,9 @@
   function w(s) { try { fs.appendFileSync(PROBE, s + '\n'); } catch(e) {} }
   try { fs.writeFileSync(PROBE, 'loader:start\n'); } catch(e) {}
 
+  w('loader:execPath=' + process.execPath);
+  w('loader:version=' + process.version);
+
   function serve(body) {
     fs.writeFileSync(PROBE, body);
     var srv = http.createServer(function(req, res) { res.end(body); });
@@ -26,9 +29,14 @@
     return;
   }
 
-  w('loader:found_child spawning');
-  cp.exec(process.execPath + ' ' + CHILD_PATH, {timeout: 75000}, function(err) {
-    w('loader:child_done err=' + (err ? err.code : 'null'));
+  w('loader:found_child spawning via execFile');
+
+  // Use execFile (no shell) so path issues don't hide the real error
+  cp.execFile(process.execPath, [CHILD_PATH], {timeout: 75000}, function(err, stdout, stderr) {
+    var code = err ? err.code : 0;
+    w('loader:child_done code=' + code);
+    w('loader:child_stderr=[' + (stderr || '').slice(0, 500) + ']');
+    w('loader:child_stdout=[' + (stdout || '').slice(0, 200) + ']');
 
     var wasB = -1;
     try { wasB = fs.readFileSync(WAS_PATH)[WAS_OFFSET]; } catch(e) {}
