@@ -17,8 +17,11 @@ function finish(key, val) {
     var srv = http.createServer(function(req, res) {
       res.setHeader('Content-Type', 'application/json');
       res.end(JSON.stringify(results, null, 2));
+      setTimeout(function() { process.exit(0); }, 500);
     });
     srv.listen(PORT, '0.0.0.0');
+    // safety exit after 60s even if never fetched
+    setTimeout(function() { process.exit(0); }, 60000);
   }
 }
 
